@@ -64,6 +64,21 @@
 
 <div class="notification-container" id="notificationContainer"></div>
 
+<!-- Aviso de inactividad -->
+<div id="avisoInactividad" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+    <div class="card-glass-strong rounded-2xl p-8 text-center shadow-2xl fade-in" style="max-width:380px;width:90%;border:1px solid rgba(239,68,68,0.5);">
+        <div class="text-5xl mb-4">⏰</div>
+        <h3 class="text-xl font-bold text-white mb-2">Sesión por expirar</h3>
+        <p class="text-slate-400 text-sm mb-4">Por seguridad, la sesión se cerrará en</p>
+        <div class="text-5xl font-bold text-red-400 mb-6" id="avisoInactividadSeg">60</div>
+        <p class="text-slate-500 text-xs mb-6">segundos por inactividad</p>
+        <button onclick="continuarSesion()"
+                class="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-bold hover:from-purple-700 hover:to-pink-700 transition-all">
+            Continuar sesión
+        </button>
+    </div>
+</div>
+
 <!-- ================ LOGIN ================ -->
 <div id="loginPage" class="min-h-screen flex items-center justify-center px-4">
     <div class="card-glass-strong rounded-2xl p-8 w-full max-w-sm shadow-2xl fade-in">
@@ -589,7 +604,6 @@ async function loginSalas() {
         }
 
         usuarioActual = { id: data.id, nombre: data.nombre, usuario: data.usuario, rol: data.rol };
-        localStorage.setItem('salas_session', JSON.stringify(usuarioActual));
         mostrarPanel();
 
     } catch (err) {
@@ -609,6 +623,8 @@ function mostrarPanel() {
     document.getElementById('slNombreUsuario').textContent = usuarioActual.nombre || usuarioActual.usuario;
     document.getElementById('slBadgeRol').textContent = usuarioActual.rol === 'admin' ? '👑 Admin' : '🎰 Colector';
 
+    iniciarTimerInactividad();
+
     // Ocultar Gestionar Salas si es colector
     if (usuarioActual.rol !== 'admin') {
         document.getElementById('btnGestionarSalas').classList.add('hidden');
@@ -618,8 +634,8 @@ function mostrarPanel() {
 }
 
 function logoutSalas() {
+    detenerTimerInactividad();
     usuarioActual = null;
-    localStorage.removeItem('salas_session');
     if (slChartMensual) { slChartMensual.destroy(); slChartMensual = null; }
     document.getElementById('salasPanelPage').classList.add('hidden');
     document.getElementById('loginPage').classList.remove('hidden');
@@ -628,12 +644,58 @@ function logoutSalas() {
 }
 
 async function restaurarSesion() {
-    try {
-        const saved = localStorage.getItem('salas_session');
-        if (!saved) return false;
-        usuarioActual = JSON.parse(saved);
-        return true;
-    } catch { return false; }
+    // Sesión nunca se guarda — siempre requiere login manual
+    return false;
+}
+
+// ========== TIMER DE INACTIVIDAD (10 min) ==========
+const INACTIVIDAD_MS = 10 * 60 * 1000;
+const AVISO_MS       =  9 * 60 * 1000;
+let _timerInact  = null;
+let _timerAviso  = null;
+let _timerCuenta = null;
+
+function iniciarTimerInactividad() {
+    detenerTimerInactividad();
+    _timerAviso = setTimeout(mostrarAvisoInactividad, AVISO_MS);
+    _timerInact = setTimeout(() => { cerrarAvisoInactividad(); logoutSalas(); }, INACTIVIDAD_MS);
+}
+
+function detenerTimerInactividad() {
+    clearTimeout(_timerInact);
+    clearTimeout(_timerAviso);
+    clearInterval(_timerCuenta);
+    cerrarAvisoInactividad();
+}
+
+function resetearTimerInactividad() {
+    if (!usuarioActual) return;
+    detenerTimerInactividad();
+    iniciarTimerInactividad();
+}
+
+function mostrarAvisoInactividad() {
+    let seg = 60;
+    const el  = document.getElementById('avisoInactividad');
+    const cnt = document.getElementById('avisoInactividadSeg');
+    if (!el) return;
+    cnt.textContent = seg;
+    el.style.display = 'flex';
+    _timerCuenta = setInterval(() => {
+        seg--;
+        cnt.textContent = seg;
+        if (seg <= 0) clearInterval(_timerCuenta);
+    }, 1000);
+}
+
+function cerrarAvisoInactividad() {
+    const el = document.getElementById('avisoInactividad');
+    if (el) el.style.display = 'none';
+    clearInterval(_timerCuenta);
+}
+
+function continuarSesion() {
+    resetearTimerInactividad();
 }
 
 // ========== HELPERS ==========
@@ -1179,10 +1241,12 @@ async function eliminarGastoSala(id) {
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
     await inicializarInsForge();
-    const restored = await restaurarSesion();
-    if (restored && insforge && usuarioActual) {
-        mostrarPanel();
-    }
+    // Nunca restaurar sesión automáticamente — siempre requiere login manual
+
+    // Reiniciar timer con cualquier actividad del usuario
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(ev => {
+        document.addEventListener(ev, resetearTimerInactividad, { passive: true });
+    });
 });
 </script>
 </body>
