@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LORENS GAMING — Salas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f172a 0%, #581c87 50%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        .card-glass {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+        .card-glass-strong {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+        .fade-in { animation: fadeInUp 0.3s ease-out forwards; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(71, 85, 105, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.6); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.8); }
+        .notification-container {
+            position: fixed; top: 20px; right: 20px; z-index: 99999;
+            display: flex; flex-direction: column; gap: 10px; max-width: 360px;
+        }
+        .notification {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            border-radius: 12px; padding: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            transform: translateX(400px); opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.68,-0.55,0.265,1.55), opacity 0.3s;
+            position: relative; overflow: hidden;
+        }
+        .notification.show { transform: translateX(0); opacity: 1; }
+        .notification::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+        .notification-success::before { background: linear-gradient(to bottom, #10b981, #34d399); }
+        .notification-error::before   { background: linear-gradient(to bottom, #ef4444, #f87171); }
+        .notification-info::before    { background: linear-gradient(to bottom, #3b82f6, #60a5fa); }
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 50;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+        }
+        @media (max-width: 640px) {
+            .modal-overlay { align-items: flex-start; padding: 0.75rem; overflow-y: auto; }
+            .notification-container { max-width: calc(100vw - 2rem); right: 1rem; left: 1rem; }
+        }
+    </style>
+</head>
+<body class="gradient-bg text-white font-sans">
+
+<div class="notification-container" id="notificationContainer"></div>
+
+<!-- ================ LOGIN ================ -->
+<div id="loginPage" class="min-h-screen flex items-center justify-center px-4">
+    <div class="card-glass-strong rounded-2xl p-8 w-full max-w-sm shadow-2xl fade-in">
+        <div class="text-center mb-8">
+            <div class="text-5xl mb-3">🏪</div>
+            <h1 class="text-2xl font-bold text-white">Salas de Casino</h1>
+            <p class="text-slate-400 text-sm mt-1">LORENS GAMING S.A</p>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-purple-300 mb-2">USUARIO</label>
+                <input type="text" id="slLoginUsuario" autocapitalize="none" autocorrect="off"
+                       class="w-full bg-slate-700 bg-opacity-50 border border-purple-500 border-opacity-30 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+                       placeholder="tu usuario"
+                       onkeydown="if(event.key==='Enter') loginSalas()">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-purple-300 mb-2">CONTRASEÑA</label>
+                <input type="password" id="slLoginClave"
+                       class="w-full bg-slate-700 bg-opacity-50 border border-purple-500 border-opacity-30 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+                       placeholder="••••••••"
+                       onkeydown="if(event.key==='Enter') loginSalas()">
+            </div>
+            <div id="slLoginError" class="hidden text-red-400 text-sm text-center bg-red-900 bg-opacity-20 rounded-lg px-3 py-2"></div>
+            <button id="slBtnLogin" onclick="loginSalas()"
+                    class="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-bold hover:from-purple-700 hover:to-pink-700 transition-all">
+                Ingresar
+            </button>
+            <div id="slLoginLoading" class="hidden text-center text-slate-400 text-sm">Verificando...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ================ PANEL SALAS ================ -->
+<div id="salasPanelPage" class="hidden min-h-screen">
+
+    <!-- Topbar -->
+    <div class="sticky top-0 z-40 card-glass border-b border-purple-500 border-opacity-20 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="text-xl font-bold">🏪 Salas Casino</span>
+                <span id="slBadgeRol" class="text-xs px-2 py-0.5 rounded-full bg-purple-900 bg-opacity-50 text-purple-300 font-semibold"></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400 hidden sm:inline" id="slNombreUsuario"></span>
+                <button onclick="logoutSalas()"
+                        class="px-3 py-1.5 flex items-center gap-1.5 rounded-lg text-sm text-red-400 hover:bg-red-900 hover:bg-opacity-30 transition-all border border-red-800">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                    <span class="hidden sm:inline">Salir</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenido Salas -->
+    <div style="max-width:80rem;margin:0 auto;padding:1.5rem 1rem 3rem">
+
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 class="text-lg font-bold">🏪 Salas de Casino</h2>
+            <div class="flex flex-wrap gap-2">
+                <button id="btnGestionarSalas" onclick="abrirModalGestionarSalas()"
+                        class="px-3 py-2 bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg text-xs font-bold hover:bg-slate-600 transition-all">
+                    ⚙️ Gestionar Salas
+                </button>
+                <button onclick="abrirModalGastoSala()"
+                        class="px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 rounded-lg text-sm font-bold hover:from-orange-700 hover:to-red-700 transition-all">
+                    💸 Gasto / Licencia
+                </button>
+                <button onclick="abrirModalRegistroSala()"
+                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-sm font-bold hover:from-purple-700 hover:to-pink-700 transition-all">
+                    ➕ Nuevo Registro
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Cards fila 1 -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+            <div class="card-glass rounded-xl p-5" style="border:1px solid rgba(168,85,247,0.5)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-purple-300 tracking-wider">TOTAL COLECTADO</span>
+                    <span class="text-3xl">🎰</span>
+                </div>
+                <div class="text-2xl font-bold text-white" id="slMetricaColectado">$0.00</div>
+                <div class="text-xs text-slate-400 mt-1">Suma de entradas</div>
+            </div>
+            <div class="card-glass rounded-xl p-5" style="border:1px solid rgba(236,72,153,0.5)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-pink-300 tracking-wider">TOTAL PREMIOS</span>
+                    <div class="flex flex-col items-end gap-1">
+                        <span class="text-3xl">🎁</span>
+                        <span id="slPctPremios" class="text-xs font-bold text-pink-300 bg-pink-900 bg-opacity-40 px-2 py-0.5 rounded-full">0%</span>
+                    </div>
+                </div>
+                <div class="text-2xl font-bold text-pink-400" id="slMetricaPremios">$0.00</div>
+                <div class="text-xs text-slate-400 mt-1">Suma de pagos</div>
+            </div>
+            <div class="card-glass rounded-xl p-5" style="border:1px solid rgba(249,115,22,0.5)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-orange-300 tracking-wider">TOTAL GASTOS</span>
+                    <span class="text-3xl">💸</span>
+                </div>
+                <div class="text-2xl font-bold text-orange-400" id="slMetricaGastos">$0.00</div>
+                <div class="text-xs text-slate-400 mt-1">Gastos operativos</div>
+            </div>
+            <div class="card-glass rounded-xl p-5" style="border:1px solid rgba(59,130,246,0.5)">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-blue-300 tracking-wider">TOTAL LICENCIAS</span>
+                    <span class="text-3xl">📋</span>
+                </div>
+                <div class="text-2xl font-bold text-blue-400" id="slMetricaLicencias">$0.00</div>
+                <div class="text-xs text-slate-400 mt-1">Pago de licencias</div>
+            </div>
+        </div>
+        <!-- Dashboard Cards fila 2 -->
+        <div class="mb-4">
+            <div class="card-glass rounded-xl p-5" style="border:1px solid rgba(34,197,94,0.5)">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-semibold text-green-300 tracking-wider">GANANCIA NETA</span>
+                        <div class="text-3xl font-bold text-green-400 mt-1" id="slMetricaGanancia">$0.00</div>
+                        <div class="text-xs text-slate-400 mt-1">Colectado − Premios − Gastos − Licencias</div>
+                    </div>
+                    <span class="text-5xl">💰</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico Mensual -->
+        <div class="card-glass rounded-xl p-5 mb-4">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="text-sm font-bold text-white">📊 Evolución Mensual por Sala</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Barras izquierda = Colectado · Barras derecha = Premios</p>
+                </div>
+                <div class="flex flex-wrap items-end gap-2">
+                    <div>
+                        <label class="text-xs text-purple-300 block mb-1">Sala</label>
+                        <select id="slChartFiltroSala" onchange="actualizarGraficoSalas()"
+                                class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                            <option value="todas">Todas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-purple-300 block mb-1">Período</label>
+                        <select id="slChartMeses" onchange="cambiarPeriodoGrafico()"
+                                class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                            <option value="3">Últimos 3 meses</option>
+                            <option value="6">Últimos 6 meses</option>
+                            <option value="12" selected>Últimos 12 meses</option>
+                            <option value="24">Últimos 24 meses</option>
+                            <option value="personalizado">📅 Personalizado</option>
+                        </select>
+                    </div>
+                    <div id="slChartFechasCustom" class="hidden flex gap-2">
+                        <div>
+                            <label class="text-xs text-purple-300 block mb-1">Desde</label>
+                            <input type="date" id="slChartDesde" onchange="actualizarGraficoSalas()"
+                                   class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-purple-300 block mb-1">Hasta</label>
+                            <input type="date" id="slChartHasta" onchange="actualizarGraficoSalas()"
+                                   class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="height:320px;position:relative;">
+                <canvas id="slGraficoMensual"></canvas>
+            </div>
+        </div>
+
+        <!-- Historial registros -->
+        <div class="card-glass rounded-xl overflow-hidden mb-4">
+            <div class="px-4 py-3 border-b border-slate-600">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <span class="text-sm font-bold text-purple-300">🎰 Registros de Colectado / Premios</span>
+                    <div class="flex flex-wrap items-end gap-2">
+                        <div>
+                            <label class="text-xs text-purple-300 block mb-1">Sala</label>
+                            <select id="slFiltroSala" onchange="cargarRegistrosSalas()"
+                                    class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="todas">Todas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-purple-300 block mb-1">Período</label>
+                            <select id="slFiltroPeriodo" onchange="cambiarFiltroPeriodoSalas()"
+                                    class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="hoy">Hoy</option>
+                                <option value="ayer">Ayer</option>
+                                <option value="semana">Última semana</option>
+                                <option value="mes" selected>Último mes</option>
+                                <option value="30dias">Últimos 30 días</option>
+                                <option value="90dias">Últimos 90 días</option>
+                                <option value="personalizado">📅 Personalizado</option>
+                            </select>
+                        </div>
+                        <div id="slFechasPersonalizadas" class="hidden flex gap-2">
+                            <div>
+                                <label class="text-xs text-purple-300 block mb-1">Desde</label>
+                                <input type="date" id="slFechaDesde" onchange="cargarRegistrosSalas()"
+                                       class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-purple-300 block mb-1">Hasta</label>
+                                <input type="date" id="slFechaHasta" onchange="cargarRegistrosSalas()"
+                                       class="bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-700 text-left text-xs text-purple-300">
+                            <th class="px-4 py-3">FECHA</th>
+                            <th class="px-4 py-3">SALA</th>
+                            <th class="px-4 py-3">COLECTADO</th>
+                            <th class="px-4 py-3">PREMIOS</th>
+                            <th class="px-4 py-3">%</th>
+                            <th class="px-4 py-3">GANANCIA</th>
+                            <th class="px-4 py-3">NOTAS</th>
+                            <th class="px-4 py-3 text-right">ACCIONES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaRegistrosSalas">
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Historial gastos -->
+        <div class="card-glass rounded-xl overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-600">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <span class="text-sm font-bold text-orange-300">💸 Historial de Gastos y Licencias</span>
+                    <div class="flex flex-wrap items-end gap-2">
+                        <div>
+                            <label class="text-xs text-orange-300 block mb-1">Tipo</label>
+                            <select id="slGastosFiltroTipo" onchange="filtrarTablaGastos()"
+                                    class="bg-slate-700 border border-orange-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="todos">Todos</option>
+                                <option value="gasto">Solo Gastos</option>
+                                <option value="licencia">Solo Licencias</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-orange-300 block mb-1">Sala</label>
+                            <select id="slGastosFiltroSala" onchange="cargarGastosSalasTabla()"
+                                    class="bg-slate-700 border border-orange-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="todas">Todas</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-orange-300 block mb-1">Período</label>
+                            <select id="slGastosFiltroPeriodo" onchange="cambiarFiltroPeriodoGastos()"
+                                    class="bg-slate-700 border border-orange-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                                <option value="hoy">Hoy</option>
+                                <option value="ayer">Ayer</option>
+                                <option value="semana">Última semana</option>
+                                <option value="mes" selected>Último mes</option>
+                                <option value="30dias">Últimos 30 días</option>
+                                <option value="90dias">Últimos 90 días</option>
+                                <option value="personalizado">📅 Personalizado</option>
+                            </select>
+                        </div>
+                        <div id="slGastosFechasCustom" class="hidden flex gap-2">
+                            <div>
+                                <label class="text-xs text-orange-300 block mb-1">Desde</label>
+                                <input type="date" id="slGastosFechaDesde" onchange="cargarGastosSalasTabla()"
+                                       class="bg-slate-700 border border-orange-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs text-orange-300 block mb-1">Hasta</label>
+                                <input type="date" id="slGastosFechaHasta" onchange="cargarGastosSalasTabla()"
+                                       class="bg-slate-700 border border-orange-500 border-opacity-30 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-700 text-left text-xs text-orange-300">
+                            <th class="px-4 py-3">FECHA</th>
+                            <th class="px-4 py-3">SALA</th>
+                            <th class="px-4 py-3">TIPO</th>
+                            <th class="px-4 py-3">MONTO</th>
+                            <th class="px-4 py-3">DESCRIPCIÓN</th>
+                            <th class="px-4 py-3 text-right">ACCIONES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaGastosSalas">
+                        <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================ MODAL: NUEVO REGISTRO SALA ================ -->
+<div id="modalRegistroSala" class="modal-overlay hidden">
+    <div class="card-glass-strong rounded-2xl p-6 w-full max-w-md shadow-2xl fade-in mx-4">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="text-lg font-bold" id="tituloModalRegistroSala">➕ Nuevo Registro de Sala</h3>
+            <button onclick="cerrarModalRegistroSala()" class="text-slate-400 hover:text-white text-xl">✕</button>
+        </div>
+        <div class="space-y-4">
+            <input type="hidden" id="registroSalaId">
+            <div>
+                <label class="text-xs text-purple-300 block mb-1">Sala *</label>
+                <select id="registroSalaNombre"
+                        class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+                    <option value="">Seleccionar sala...</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-purple-300 block mb-1">Fecha *</label>
+                <input type="date" id="registroSalaFecha"
+                       class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-purple-300 block mb-1">Total Colectado ($) *</label>
+                    <input type="number" id="registroSalaColectado" min="0" step="0.01"
+                           oninput="calcularVistaPreviewSala()" placeholder="0.00"
+                           class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+                </div>
+                <div>
+                    <label class="text-xs text-pink-300 block mb-1">Total Premios ($)</label>
+                    <input type="number" id="registroSalaPremios" min="0" step="0.01"
+                           oninput="calcularVistaPreviewSala()" placeholder="0.00"
+                           class="w-full bg-slate-700 border border-pink-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-pink-400">
+                </div>
+            </div>
+            <div class="card-glass rounded-xl p-4 grid grid-cols-2 gap-3" style="border:1px solid rgba(34,197,94,0.3)">
+                <div class="text-center">
+                    <div class="text-xs text-slate-400 mb-1">% Premios</div>
+                    <div class="text-lg font-bold text-pink-400" id="slPreviewPct">0%</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-xs text-slate-400 mb-1">Ganancia</div>
+                    <div class="text-lg font-bold text-green-400" id="slPreviewGanancia">$0.00</div>
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-purple-300 block mb-1">Notas</label>
+                <input type="text" id="registroSalaNotas" placeholder="Opcional..."
+                       class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button onclick="cerrarModalRegistroSala()"
+                        class="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold transition-all">
+                    Cancelar
+                </button>
+                <button onclick="guardarRegistroSala()"
+                        class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-sm font-bold hover:from-purple-700 hover:to-pink-700 transition-all">
+                    💾 Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================ MODAL: GESTIONAR SALAS ================ -->
+<div id="modalGestionarSalas" class="modal-overlay hidden">
+    <div class="card-glass-strong rounded-2xl p-6 w-full max-w-md shadow-2xl fade-in mx-4">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="text-lg font-bold">⚙️ Gestionar Salas</h3>
+            <button onclick="cerrarModalGestionarSalas()" class="text-slate-400 hover:text-white text-xl">✕</button>
+        </div>
+        <div class="card-glass rounded-xl p-4 mb-4" style="border:1px solid rgba(168,85,247,0.3)">
+            <div class="text-xs font-semibold text-purple-300 mb-3">➕ Nueva Sala</div>
+            <div class="flex gap-2">
+                <input type="text" id="nuevaSalaNombre" placeholder="Nombre de la sala..."
+                       class="flex-1 bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+                <button onclick="crearSala()"
+                        class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-sm font-bold hover:opacity-90 transition-all shrink-0">
+                    Agregar
+                </button>
+            </div>
+        </div>
+        <div id="listaSalasGestion" class="space-y-2 max-h-80 overflow-y-auto">
+            <div class="text-center text-slate-400 text-sm py-4">Cargando...</div>
+        </div>
+        <div class="mt-4">
+            <button onclick="cerrarModalGestionarSalas()"
+                    class="w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold transition-all">
+                Cerrar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ================ MODAL: GASTO / LICENCIA ================ -->
+<div id="modalGastoSala" class="modal-overlay hidden">
+    <div class="card-glass-strong rounded-2xl p-6 w-full max-w-md shadow-2xl fade-in mx-4">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="text-lg font-bold" id="tituloModalGastoSala">💸 Nuevo Gasto / Licencia</h3>
+            <button onclick="cerrarModalGastoSala()" class="text-slate-400 hover:text-white text-xl">✕</button>
+        </div>
+        <div class="space-y-4">
+            <input type="hidden" id="gastoSalaId">
+            <div>
+                <label class="text-xs text-purple-300 block mb-2">Tipo *</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 cursor-pointer card-glass rounded-lg px-3 py-2.5" style="border:1px solid rgba(249,115,22,0.4)">
+                        <input type="radio" name="gastoTipo" value="gasto" checked class="accent-orange-500">
+                        <span class="text-sm text-white font-medium">💸 Gasto</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer card-glass rounded-lg px-3 py-2.5" style="border:1px solid rgba(59,130,246,0.4)">
+                        <input type="radio" name="gastoTipo" value="licencia" class="accent-blue-500">
+                        <span class="text-sm text-white font-medium">📋 Licencia</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-purple-300 block mb-1">Sala *</label>
+                <select id="gastoSalaNombre"
+                        class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+                    <option value="">Seleccionar sala...</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-purple-300 block mb-1">Fecha *</label>
+                <input type="date" id="gastoSalaFecha"
+                       class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+            </div>
+            <div>
+                <label class="text-xs text-orange-300 block mb-1">Monto ($) *</label>
+                <input type="number" id="gastoSalaMonto" min="0" step="0.01" placeholder="0.00"
+                       class="w-full bg-slate-700 border border-orange-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-orange-400">
+            </div>
+            <div>
+                <label class="text-xs text-purple-300 block mb-1">Descripción</label>
+                <input type="text" id="gastoSalaDescripcion" placeholder="Opcional..."
+                       class="w-full bg-slate-700 border border-purple-500 border-opacity-30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-400">
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button onclick="cerrarModalGastoSala()"
+                        class="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-bold transition-all">
+                    Cancelar
+                </button>
+                <button onclick="guardarGastoSala()"
+                        class="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-red-600 rounded-lg text-sm font-bold hover:from-orange-700 hover:to-red-700 transition-all">
+                    💾 Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ========== CONFIG ==========
+const INSFORGE_CONFIG = {
+    baseUrl: 'https://bn9588kv.us-east.insforge.app',
+    anonKey: 'ik_c35fd8e48649cf4ffa4a18850b3765ba'
+};
+
+let insforge = null;
+let usuarioActual = null;
+let slChartMensual = null;
+let _gastosCache = [];
+
+// ========== INSFORGE ==========
+async function inicializarInsForge() {
+    try {
+        const { createClient } = await import('https://esm.sh/@insforge/sdk@1.1.5');
+        insforge = createClient({ baseUrl: INSFORGE_CONFIG.baseUrl, anonKey: INSFORGE_CONFIG.anonKey });
+        await insforge.auth.signInWithPassword({ email: 'admin@lorens.com', password: '25021985' });
+        return true;
+    } catch (e) {
+        console.error('InsForge init error:', e);
+        return false;
+    }
+}
+
+// ========== AUTH ==========
+async function loginSalas() {
+    const usuario  = document.getElementById('slLoginUsuario').value.trim().toLowerCase();
+    const clave    = document.getElementById('slLoginClave').value.trim();
+    const errorEl  = document.getElementById('slLoginError');
+    const loadEl   = document.getElementById('slLoginLoading');
+    const btn      = document.getElementById('slBtnLogin');
+
+    if (!usuario || !clave) {
+        errorEl.textContent = 'Ingrese usuario y contraseña';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    errorEl.classList.add('hidden');
+    loadEl.classList.remove('hidden');
+    btn.disabled = true;
+
+    try {
+        if (!insforge) {
+            const ok = await inicializarInsForge();
+            if (!ok) throw new Error('No se pudo conectar con el servidor');
+        }
+
+        const { data, error } = await insforge.database
+            .from('usuarios')
+            .select('*')
+            .eq('usuario', usuario)
+            .eq('clave', clave)
+            .eq('activo', true)
+            .single();
+
+        if (error || !data) throw new Error('Usuario o contraseña incorrectos');
+
+        // Permitir admin y colector
+        if (!['admin', 'colector'].includes(data.rol)) {
+            throw new Error('Acceso denegado para este rol');
+        }
+
+        usuarioActual = { id: data.id, nombre: data.nombre, usuario: data.usuario, rol: data.rol };
+        localStorage.setItem('salas_session', JSON.stringify(usuarioActual));
+        mostrarPanel();
+
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+    } finally {
+        loadEl.classList.add('hidden');
+        btn.disabled = false;
+    }
+}
+
+function mostrarPanel() {
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('salasPanelPage').classList.remove('hidden');
+
+    // Mostrar info usuario
+    document.getElementById('slNombreUsuario').textContent = usuarioActual.nombre || usuarioActual.usuario;
+    document.getElementById('slBadgeRol').textContent = usuarioActual.rol === 'admin' ? '👑 Admin' : '🎰 Colector';
+
+    // Ocultar Gestionar Salas si es colector
+    if (usuarioActual.rol !== 'admin') {
+        document.getElementById('btnGestionarSalas').classList.add('hidden');
+    }
+
+    cargarSalas();
+}
+
+function logoutSalas() {
+    usuarioActual = null;
+    localStorage.removeItem('salas_session');
+    if (slChartMensual) { slChartMensual.destroy(); slChartMensual = null; }
+    document.getElementById('salasPanelPage').classList.add('hidden');
+    document.getElementById('loginPage').classList.remove('hidden');
+    document.getElementById('slLoginUsuario').value = '';
+    document.getElementById('slLoginClave').value = '';
+}
+
+async function restaurarSesion() {
+    try {
+        const saved = localStorage.getItem('salas_session');
+        if (!saved) return false;
+        usuarioActual = JSON.parse(saved);
+        return true;
+    } catch { return false; }
+}
+
+// ========== HELPERS ==========
+function formatCurrency(val) {
+    return '$' + (parseFloat(val) || 0).toFixed(2);
+}
+
+function formatDateSQL(date) {
+    const d = new Date(date);
+    return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+}
+
+function showNotification(msg, type = 'info') {
+    const container = document.getElementById('notificationContainer');
+    const el = document.createElement('div');
+    el.className = `notification notification-${type}`;
+    el.innerHTML = `<div class="text-sm text-white">${msg}</div>`;
+    container.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); }, 3500);
+}
+
+// ========== SALAS ==========
+
+function obtenerFechasSalas() {
+    const periodo = document.getElementById('slFiltroPeriodo')?.value || 'mes';
+    const hoy = formatDateSQL(new Date());
+    if (periodo === 'personalizado') {
+        return {
+            fechaInicio: document.getElementById('slFechaDesde').value || hoy,
+            fechaFin:    document.getElementById('slFechaHasta').value || hoy
+        };
+    }
+    const d = new Date(), inicio = new Date();
+    if      (periodo === 'ayer')   { inicio.setDate(d.getDate()-1); d.setDate(d.getDate()-1); }
+    else if (periodo === 'semana') { inicio.setDate(d.getDate()-6); }
+    else if (periodo === 'mes')    { inicio.setDate(1); }
+    else if (periodo === '30dias') { inicio.setDate(d.getDate()-29); }
+    else if (periodo === '90dias') { inicio.setDate(d.getDate()-89); }
+    return { fechaInicio: formatDateSQL(inicio), fechaFin: formatDateSQL(d) };
+}
+
+function cambiarFiltroPeriodoSalas() {
+    const p = document.getElementById('slFiltroPeriodo').value;
+    const custom = document.getElementById('slFechasPersonalizadas');
+    if (p === 'personalizado') { custom.classList.remove('hidden'); }
+    else { custom.classList.add('hidden'); cargarRegistrosSalas(); }
+}
+
+function obtenerFechasGastos() {
+    const periodo = document.getElementById('slGastosFiltroPeriodo')?.value || 'mes';
+    const hoy = formatDateSQL(new Date());
+    if (periodo === 'personalizado') {
+        return {
+            fechaInicio: document.getElementById('slGastosFechaDesde').value || hoy,
+            fechaFin:    document.getElementById('slGastosFechaHasta').value || hoy
+        };
+    }
+    const d = new Date(), inicio = new Date();
+    if      (periodo === 'ayer')   { inicio.setDate(d.getDate()-1); d.setDate(d.getDate()-1); }
+    else if (periodo === 'semana') { inicio.setDate(d.getDate()-6); }
+    else if (periodo === 'mes')    { inicio.setDate(1); }
+    else if (periodo === '30dias') { inicio.setDate(d.getDate()-29); }
+    else if (periodo === '90dias') { inicio.setDate(d.getDate()-89); }
+    return { fechaInicio: formatDateSQL(inicio), fechaFin: formatDateSQL(d) };
+}
+
+function cambiarFiltroPeriodoGastos() {
+    const p = document.getElementById('slGastosFiltroPeriodo').value;
+    const custom = document.getElementById('slGastosFechasCustom');
+    if (p === 'personalizado') { custom.classList.remove('hidden'); }
+    else { custom.classList.add('hidden'); cargarGastosSalasTabla(); }
+}
+
+async function cargarListaSalasSelect(selectId, valorActual = '') {
+    const { data } = await insforge.database.from('salas').select('*').eq('activa', true).order('nombre');
+    const salas = data || [];
+    const sel = document.getElementById(selectId);
+    if (!sel) return salas;
+    const conTodas = ['slFiltroSala', 'slChartFiltroSala', 'slGastosFiltroSala'].includes(selectId);
+    const opExtra = conTodas ? '<option value="todas">Todas</option>' : '<option value="">Seleccionar sala...</option>';
+    sel.innerHTML = opExtra + salas.map(s => `<option value="${s.id}" ${s.id == valorActual ? 'selected' : ''}>${s.nombre}</option>`).join('');
+    return salas;
+}
+
+async function cargarSalas() {
+    await Promise.all([
+        cargarListaSalasSelect('slFiltroSala'),
+        cargarListaSalasSelect('slChartFiltroSala'),
+        cargarListaSalasSelect('slGastosFiltroSala'),
+    ]);
+    await Promise.all([cargarRegistrosSalas(), cargarGastosSalasTabla()]);
+    actualizarGraficoSalas();
+}
+
+async function cargarRegistrosSalas() {
+    try {
+        const { fechaInicio, fechaFin } = obtenerFechasSalas();
+        const filtroSala = document.getElementById('slFiltroSala')?.value || 'todas';
+        let q = insforge.database.from('registros_salas').select('*, salas(nombre)')
+            .gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: false });
+        if (filtroSala !== 'todas') q = q.eq('sala_id', filtroSala);
+        const { data, error } = await q;
+        if (error) throw error;
+        const registros = data || [];
+        const tbody = document.getElementById('tablaRegistrosSalas');
+        if (!registros.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Sin registros en este período</td></tr>';
+            return;
+        }
+        tbody.innerHTML = registros.map(r => {
+            const col = parseFloat(r.total_colectado) || 0;
+            const prem = parseFloat(r.total_premios) || 0;
+            const gan = col - prem;
+            const p = col > 0 ? ((prem / col) * 100).toFixed(1) : '0.0';
+            const nombreSala = r.salas?.nombre || '—';
+            return `<tr class="border-b border-slate-700 hover:bg-slate-700 hover:bg-opacity-30 transition-colors">
+                <td class="px-4 py-3 text-sm text-slate-300">${r.fecha}</td>
+                <td class="px-4 py-3"><span class="text-xs font-semibold text-purple-300 bg-purple-900 bg-opacity-30 px-2 py-0.5 rounded-full">${nombreSala}</span></td>
+                <td class="px-4 py-3 text-sm font-bold text-white">${formatCurrency(col)}</td>
+                <td class="px-4 py-3 text-sm font-bold text-pink-400">${formatCurrency(prem)}</td>
+                <td class="px-4 py-3 text-sm text-slate-300">${p}%</td>
+                <td class="px-4 py-3 text-sm font-bold ${gan >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(gan)}</td>
+                <td class="px-4 py-3 text-xs text-slate-400">${r.notas || '—'}</td>
+                <td class="px-4 py-3 text-right">
+                    <button onclick="editarRegistroSala(${r.id})" class="text-blue-400 hover:text-blue-300 text-xs mr-2">✏️ Editar</button>
+                    <button onclick="eliminarRegistroSala(${r.id})" class="text-red-400 hover:text-red-300 text-xs">🗑 Eliminar</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        showNotification('Error cargando registros: ' + e.message, 'error');
+    }
+}
+
+async function cargarGastosSalasTabla() {
+    try {
+        const filtroSala = document.getElementById('slGastosFiltroSala')?.value || 'todas';
+        const { fechaInicio, fechaFin } = obtenerFechasGastos();
+        let q = insforge.database.from('gastos_salas').select('*, salas(nombre)')
+            .gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: false });
+        if (filtroSala !== 'todas') q = q.eq('sala_id', filtroSala);
+        const { data, error } = await q;
+        if (error) throw error;
+        _gastosCache = data || [];
+        filtrarTablaGastos();
+    } catch (e) {
+        showNotification('Error cargando gastos: ' + e.message, 'error');
+    }
+}
+
+function renderizarTablaGastos(gastos) {
+    const tbody = document.getElementById('tablaGastosSalas');
+    if (!tbody) return;
+    if (!gastos.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Sin gastos ni licencias en este período</td></tr>';
+        return;
+    }
+    tbody.innerHTML = gastos.map(g => {
+        const esLic = g.tipo === 'licencia';
+        const badge = esLic
+            ? '<span class="text-xs font-semibold text-blue-300 bg-blue-900 bg-opacity-40 px-2 py-0.5 rounded-full">📋 Licencia</span>'
+            : '<span class="text-xs font-semibold text-orange-300 bg-orange-900 bg-opacity-40 px-2 py-0.5 rounded-full">💸 Gasto</span>';
+        return `<tr class="border-b border-slate-700 hover:bg-slate-700 hover:bg-opacity-30 transition-colors">
+            <td class="px-4 py-3 text-sm text-slate-300">${g.fecha}</td>
+            <td class="px-4 py-3"><span class="text-xs font-semibold text-purple-300 bg-purple-900 bg-opacity-30 px-2 py-0.5 rounded-full">${g.salas?.nombre || '—'}</span></td>
+            <td class="px-4 py-3">${badge}</td>
+            <td class="px-4 py-3 text-sm font-bold ${esLic ? 'text-blue-400' : 'text-orange-400'}">${formatCurrency(parseFloat(g.monto) || 0)}</td>
+            <td class="px-4 py-3 text-xs text-slate-400">${g.descripcion || '—'}</td>
+            <td class="px-4 py-3 text-right">
+                <button onclick="editarGastoSala(${g.id})" class="text-blue-400 hover:text-blue-300 text-xs mr-2">✏️ Editar</button>
+                <button onclick="eliminarGastoSala(${g.id})" class="text-red-400 hover:text-red-300 text-xs">🗑 Eliminar</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function filtrarTablaGastos() {
+    const tipo = document.getElementById('slGastosFiltroTipo')?.value || 'todos';
+    const sala = document.getElementById('slGastosFiltroSala')?.value || 'todas';
+    let f = _gastosCache;
+    if (tipo !== 'todos') f = f.filter(g => g.tipo === tipo);
+    if (sala !== 'todas') f = f.filter(g => String(g.sala_id) === String(sala));
+    renderizarTablaGastos(f);
+}
+
+async function actualizarGraficoSalas() {
+    const filtroSala = document.getElementById('slChartFiltroSala')?.value || 'todas';
+    const meses = document.getElementById('slChartMeses')?.value || '12';
+    const hoyStr = formatDateSQL(new Date());
+    let fechaInicio, fechaFin = hoyStr;
+
+    if (meses === 'personalizado') {
+        fechaInicio = document.getElementById('slChartDesde')?.value || hoyStr;
+        fechaFin    = document.getElementById('slChartHasta')?.value || hoyStr;
+    } else {
+        const d = new Date(); d.setMonth(d.getMonth() - parseInt(meses));
+        fechaInicio = formatDateSQL(d);
+    }
+
+    try {
+        let qChart = insforge.database.from('registros_salas')
+            .select('fecha, total_colectado, total_premios, sala_id, salas(nombre)')
+            .gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: true });
+        if (filtroSala !== 'todas') qChart = qChart.eq('sala_id', filtroSala);
+
+        let qReg = insforge.database.from('registros_salas').select('total_colectado, total_premios')
+            .gte('fecha', fechaInicio).lte('fecha', fechaFin);
+        if (filtroSala !== 'todas') qReg = qReg.eq('sala_id', filtroSala);
+
+        let qGas = insforge.database.from('gastos_salas').select('tipo, monto')
+            .gte('fecha', fechaInicio).lte('fecha', fechaFin);
+        if (filtroSala !== 'todas') qGas = qGas.eq('sala_id', filtroSala);
+
+        const [{ data: dataChart }, { data: dataReg }, { data: dataGas }] = await Promise.all([qChart, qReg, qGas]);
+
+        let totalColectado = 0, totalPremios = 0, totalGastos = 0, totalLicencias = 0;
+        (dataReg || []).forEach(r => {
+            totalColectado += parseFloat(r.total_colectado) || 0;
+            totalPremios   += parseFloat(r.total_premios)   || 0;
+        });
+        (dataGas || []).forEach(g => {
+            if (g.tipo === 'gasto')    totalGastos    += parseFloat(g.monto) || 0;
+            if (g.tipo === 'licencia') totalLicencias += parseFloat(g.monto) || 0;
+        });
+        const ganancia = totalColectado - totalPremios - totalGastos - totalLicencias;
+        const pct = totalColectado > 0 ? ((totalPremios / totalColectado) * 100).toFixed(1) : '0.0';
+
+        document.getElementById('slMetricaColectado').textContent  = formatCurrency(totalColectado);
+        document.getElementById('slMetricaPremios').textContent    = formatCurrency(totalPremios);
+        document.getElementById('slMetricaGastos').textContent     = formatCurrency(totalGastos);
+        document.getElementById('slMetricaLicencias').textContent  = formatCurrency(totalLicencias);
+        document.getElementById('slMetricaGanancia').textContent   = formatCurrency(ganancia);
+        document.getElementById('slPctPremios').textContent        = pct + '%';
+
+        renderizarGraficoSalas(dataChart || []);
+    } catch (e) {
+        console.error('Error actualizando gráfico:', e);
+    }
+}
+
+function cambiarPeriodoGrafico() {
+    const p = document.getElementById('slChartMeses').value;
+    const custom = document.getElementById('slChartFechasCustom');
+    if (p === 'personalizado') { custom.classList.remove('hidden'); }
+    else { custom.classList.add('hidden'); actualizarGraficoSalas(); }
+}
+
+function renderizarGraficoSalas(registros) {
+    const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const PALETA = [
+        { col: 'rgba(168,85,247,0.82)',  colB: 'rgba(168,85,247,1)',  prem: 'rgba(236,72,153,0.82)',  premB: 'rgba(236,72,153,1)'  },
+        { col: 'rgba(6,182,212,0.82)',   colB: 'rgba(6,182,212,1)',   prem: 'rgba(249,115,22,0.82)',  premB: 'rgba(249,115,22,1)'  },
+        { col: 'rgba(34,197,94,0.82)',   colB: 'rgba(34,197,94,1)',   prem: 'rgba(234,179,8,0.82)',   premB: 'rgba(234,179,8,1)'   },
+        { col: 'rgba(239,68,68,0.82)',   colB: 'rgba(239,68,68,1)',   prem: 'rgba(251,146,60,0.82)',  premB: 'rgba(251,146,60,1)'  },
+    ];
+
+    const salasOrden = [], salasVisto = new Set(), mesesSet = new Set();
+    registros.forEach(r => {
+        const salaId = r.sala_id, salaNom = r.salas?.nombre || ('Sala ' + salaId), mes = r.fecha.substring(0, 7);
+        if (!salasVisto.has(salaId)) { salasVisto.add(salaId); salasOrden.push({ id: salaId, nombre: salaNom }); }
+        mesesSet.add(mes);
+    });
+
+    const meses = Array.from(mesesSet).sort();
+    const labels = meses.map(k => { const [y, m] = k.split('-'); return MESES[parseInt(m)-1] + '\n' + y; });
+
+    const dataMapa = {};
+    salasOrden.forEach(s => { dataMapa[s.id] = {}; meses.forEach(m => { dataMapa[s.id][m] = { colectado: 0, premios: 0 }; }); });
+    registros.forEach(r => {
+        const mes = r.fecha.substring(0, 7);
+        if (dataMapa[r.sala_id]?.[mes]) {
+            dataMapa[r.sala_id][mes].colectado += parseFloat(r.total_colectado) || 0;
+            dataMapa[r.sala_id][mes].premios   += parseFloat(r.total_premios)   || 0;
+        }
+    });
+
+    const datasets = [];
+    salasOrden.forEach((sala, i) => {
+        const c = PALETA[i % PALETA.length];
+        datasets.push({ label: sala.nombre + ' · Colectado', data: meses.map(m => +dataMapa[sala.id][m].colectado.toFixed(2)), backgroundColor: c.col, borderColor: c.colB, borderWidth: 1, borderRadius: 4, borderSkipped: false });
+        datasets.push({ label: sala.nombre + ' · Premios',   data: meses.map(m => +dataMapa[sala.id][m].premios.toFixed(2)),   backgroundColor: c.prem, borderColor: c.premB, borderWidth: 1, borderRadius: 4, borderSkipped: false });
+    });
+
+    if (slChartMensual) { slChartMensual.destroy(); slChartMensual = null; }
+    const ctx = document.getElementById('slGraficoMensual');
+    if (!ctx) return;
+
+    slChartMensual = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: { labels, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { color: '#e2e8f0', font: { size: 11 }, padding: 14, boxWidth: 14, boxHeight: 14 } },
+                tooltip: {
+                    backgroundColor: 'rgba(15,23,42,0.95)', borderColor: 'rgba(168,85,247,0.4)', borderWidth: 1,
+                    titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10,
+                    callbacks: { label: c => '  ' + c.dataset.label + ': $' + c.raw.toLocaleString('es-PA', { minimumFractionDigits: 2 }) }
+                },
+                datalabels: false
+            },
+            layout: { padding: { top: 28 } },
+            scales: {
+                x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.08)' } },
+                y: { ticks: { color: '#94a3b8', font: { size: 10 }, callback: v => '$' + v.toLocaleString('es-PA') }, grid: { color: 'rgba(148,163,184,0.08)' } }
+            },
+            animation: {
+                onComplete: function() {
+                    const chart = this, ctx2 = chart.ctx;
+                    ctx2.save(); ctx2.font = 'bold 9px sans-serif'; ctx2.textAlign = 'center'; ctx2.textBaseline = 'bottom';
+                    chart.data.datasets.forEach((ds, di) => {
+                        const meta = chart.getDatasetMeta(di);
+                        meta.data.forEach((bar, i) => {
+                            const val = ds.data[i]; if (!val) return;
+                            ctx2.fillStyle = 'rgba(255,255,255,0.85)';
+                            ctx2.fillText('$' + val.toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), bar.x, bar.y - 3);
+                        });
+                    });
+                    ctx2.restore();
+                }
+            }
+        }
+    });
+}
+
+// ========== MODALES: REGISTRO ==========
+async function abrirModalRegistroSala(id = null) {
+    document.getElementById('registroSalaId').value = id || '';
+    document.getElementById('tituloModalRegistroSala').textContent = id ? '✏️ Editar Registro' : '➕ Nuevo Registro de Sala';
+    const hoy = formatDateSQL(new Date());
+    document.getElementById('registroSalaFecha').value = hoy;
+    document.getElementById('registroSalaColectado').value = '';
+    document.getElementById('registroSalaPremios').value = '';
+    document.getElementById('registroSalaNotas').value = '';
+    document.getElementById('slPreviewPct').textContent = '0%';
+    document.getElementById('slPreviewGanancia').textContent = '$0.00';
+    await cargarListaSalasSelect('registroSalaNombre');
+    if (id) {
+        const { data } = await insforge.database.from('registros_salas').select('*').eq('id', id).single();
+        if (data) {
+            document.getElementById('registroSalaNombre').value    = data.sala_id;
+            document.getElementById('registroSalaFecha').value     = data.fecha;
+            document.getElementById('registroSalaColectado').value = data.total_colectado;
+            document.getElementById('registroSalaPremios').value   = data.total_premios;
+            document.getElementById('registroSalaNotas').value     = data.notas || '';
+            calcularVistaPreviewSala();
+        }
+    }
+    document.getElementById('modalRegistroSala').classList.remove('hidden');
+}
+
+function cerrarModalRegistroSala() {
+    document.getElementById('modalRegistroSala').classList.add('hidden');
+}
+
+function calcularVistaPreviewSala() {
+    const col = parseFloat(document.getElementById('registroSalaColectado').value) || 0;
+    const prem = parseFloat(document.getElementById('registroSalaPremios').value) || 0;
+    const gan = col - prem;
+    const p = col > 0 ? ((prem / col) * 100).toFixed(1) : '0.0';
+    document.getElementById('slPreviewPct').textContent = p + '%';
+    document.getElementById('slPreviewGanancia').textContent = formatCurrency(gan);
+}
+
+async function guardarRegistroSala() {
+    const id     = document.getElementById('registroSalaId').value;
+    const sala_id = document.getElementById('registroSalaNombre').value;
+    const fecha  = document.getElementById('registroSalaFecha').value;
+    const col    = parseFloat(document.getElementById('registroSalaColectado').value) || 0;
+    const prem   = parseFloat(document.getElementById('registroSalaPremios').value) || 0;
+    const notas  = document.getElementById('registroSalaNotas').value.trim();
+
+    if (!sala_id) { showNotification('Selecciona una sala', 'error'); return; }
+    if (!fecha)   { showNotification('Selecciona una fecha', 'error'); return; }
+    if (col <= 0) { showNotification('Ingresa el total colectado', 'error'); return; }
+
+    const payload = { sala_id: parseInt(sala_id), fecha, total_colectado: col, total_premios: prem, notas: notas || null };
+    try {
+        if (id) {
+            const { error } = await insforge.database.from('registros_salas').update(payload).eq('id', id);
+            if (error) throw error;
+            showNotification('Registro actualizado', 'success');
+        } else {
+            const { error } = await insforge.database.from('registros_salas').insert(payload);
+            if (error) throw error;
+            showNotification('Registro guardado', 'success');
+        }
+        cerrarModalRegistroSala();
+        cargarSalas();
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+async function editarRegistroSala(id)  { await abrirModalRegistroSala(id); }
+
+async function eliminarRegistroSala(id) {
+    if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+    try {
+        const { error } = await insforge.database.from('registros_salas').delete().eq('id', id);
+        if (error) throw error;
+        showNotification('Registro eliminado', 'success');
+        cargarSalas();
+    } catch (e) {
+        showNotification('Error: ' + e.message, 'error');
+    }
+}
+
+// ========== MODALES: GESTIONAR SALAS (solo admin) ==========
+async function abrirModalGestionarSalas() {
+    if (usuarioActual?.rol !== 'admin') { showNotification('Acceso denegado', 'error'); return; }
+    document.getElementById('nuevaSalaNombre').value = '';
+    document.getElementById('modalGestionarSalas').classList.remove('hidden');
+    await renderizarListaSalasGestion();
+}
+
+function cerrarModalGestionarSalas() {
+    document.getElementById('modalGestionarSalas').classList.add('hidden');
+    cargarListaSalasSelect('slFiltroSala').then(() => { document.getElementById('slFiltroSala').value = 'todas'; });
+}
+
+async function renderizarListaSalasGestion() {
+    const { data } = await insforge.database.from('salas').select('*').order('nombre');
+    const salas = data || [];
+    const lista = document.getElementById('listaSalasGestion');
+    if (!salas.length) { lista.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">No hay salas creadas</div>'; return; }
+    lista.innerHTML = salas.map(s => `
+        <div class="flex items-center justify-between bg-slate-700 bg-opacity-50 rounded-lg px-3 py-2.5">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-white">🏪 ${s.nombre}</span>
+                ${!s.activa ? '<span class="text-xs text-slate-400">(inactiva)</span>' : ''}
+            </div>
+            <div class="flex gap-2">
+                <button onclick="toggleSalaActiva(${s.id}, ${s.activa})"
+                        class="text-xs px-2 py-1 rounded ${s.activa ? 'bg-green-900 text-green-300 hover:bg-green-800' : 'bg-slate-600 text-slate-300 hover:bg-slate-500'} transition-all">
+                    ${s.activa ? '✓ Activa' : '○ Inactiva'}
+                </button>
+                <button onclick="eliminarSala(${s.id})"
+                        class="text-xs px-2 py-1 rounded bg-red-900 bg-opacity-40 text-red-400 hover:bg-red-900 hover:bg-opacity-70 transition-all">🗑</button>
+            </div>
+        </div>`).join('');
+}
+
+async function crearSala() {
+    const nombre = document.getElementById('nuevaSalaNombre').value.trim();
+    if (!nombre) { showNotification('Ingresa el nombre de la sala', 'error'); return; }
+    try {
+        const { error } = await insforge.database.from('salas').insert({ nombre, activa: true });
+        if (error) throw error;
+        document.getElementById('nuevaSalaNombre').value = '';
+        showNotification('Sala creada', 'success');
+        await renderizarListaSalasGestion();
+    } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+}
+
+async function toggleSalaActiva(id, activa) {
+    try {
+        const { error } = await insforge.database.from('salas').update({ activa: !activa }).eq('id', id);
+        if (error) throw error;
+        await renderizarListaSalasGestion();
+    } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+}
+
+async function eliminarSala(id) {
+    if (!confirm('¿Eliminar esta sala? Los registros existentes se mantendrán pero quedarán sin sala asignada.')) return;
+    try {
+        const { error } = await insforge.database.from('salas').delete().eq('id', id);
+        if (error) throw error;
+        showNotification('Sala eliminada', 'success');
+        await renderizarListaSalasGestion();
+    } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+}
+
+// ========== MODALES: GASTO / LICENCIA ==========
+async function abrirModalGastoSala(id = null) {
+    document.getElementById('gastoSalaId').value = id || '';
+    document.getElementById('tituloModalGastoSala').textContent = id ? '✏️ Editar Gasto / Licencia' : '💸 Nuevo Gasto / Licencia';
+    document.getElementById('gastoSalaFecha').value = formatDateSQL(new Date());
+    document.getElementById('gastoSalaMonto').value = '';
+    document.getElementById('gastoSalaDescripcion').value = '';
+    document.querySelectorAll('input[name="gastoTipo"]').forEach(r => { r.checked = r.value === 'gasto'; });
+    await cargarListaSalasSelect('gastoSalaNombre');
+    if (id) {
+        const { data } = await insforge.database.from('gastos_salas').select('*').eq('id', id).single();
+        if (data) {
+            document.getElementById('gastoSalaNombre').value      = data.sala_id;
+            document.getElementById('gastoSalaFecha').value       = data.fecha;
+            document.getElementById('gastoSalaMonto').value       = data.monto;
+            document.getElementById('gastoSalaDescripcion').value = data.descripcion || '';
+            document.querySelectorAll('input[name="gastoTipo"]').forEach(r => { r.checked = r.value === data.tipo; });
+        }
+    }
+    document.getElementById('modalGastoSala').classList.remove('hidden');
+}
+
+function cerrarModalGastoSala() {
+    document.getElementById('modalGastoSala').classList.add('hidden');
+}
+
+async function guardarGastoSala() {
+    const id          = document.getElementById('gastoSalaId').value;
+    const sala_id     = document.getElementById('gastoSalaNombre').value;
+    const fecha       = document.getElementById('gastoSalaFecha').value;
+    const monto       = parseFloat(document.getElementById('gastoSalaMonto').value) || 0;
+    const descripcion = document.getElementById('gastoSalaDescripcion').value.trim();
+    const tipo        = document.querySelector('input[name="gastoTipo"]:checked')?.value || 'gasto';
+
+    if (!sala_id)  { showNotification('Selecciona una sala', 'error'); return; }
+    if (!fecha)    { showNotification('Selecciona una fecha', 'error'); return; }
+    if (monto <= 0){ showNotification('Ingresa un monto mayor a 0', 'error'); return; }
+
+    const payload = { sala_id: parseInt(sala_id), fecha, tipo, monto, descripcion: descripcion || null };
+    try {
+        if (id) {
+            const { error } = await insforge.database.from('gastos_salas').update(payload).eq('id', id);
+            if (error) throw error;
+            showNotification('Registro actualizado', 'success');
+        } else {
+            const { error } = await insforge.database.from('gastos_salas').insert(payload);
+            if (error) throw error;
+            showNotification('Registro guardado', 'success');
+        }
+        cerrarModalGastoSala();
+        cargarSalas();
+    } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+}
+
+async function editarGastoSala(id)  { await abrirModalGastoSala(id); }
+
+async function eliminarGastoSala(id) {
+    if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+    try {
+        const { error } = await insforge.database.from('gastos_salas').delete().eq('id', id);
+        if (error) throw error;
+        showNotification('Registro eliminado', 'success');
+        cargarSalas();
+    } catch (e) { showNotification('Error: ' + e.message, 'error'); }
+}
+
+// ========== INIT ==========
+document.addEventListener('DOMContentLoaded', async () => {
+    await inicializarInsForge();
+    const restored = await restaurarSesion();
+    if (restored && insforge && usuarioActual) {
+        mostrarPanel();
+    }
+});
+</script>
+</body>
+</html>
