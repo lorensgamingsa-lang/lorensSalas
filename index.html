@@ -541,10 +541,16 @@
 
 <script>
 // ========== CONFIG ==========
+// La anonKey es pública por diseño: identifica al proyecto pero NO da
+// permisos por sí sola. Nunca poner aquí la API key de administrador.
 const INSFORGE_CONFIG = {
     baseUrl: 'https://bn9588kv.us-east.insforge.app',
-    anonKey: 'ik_c35fd8e48649cf4ffa4a18850b3765ba'
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OC0xMjM0LTU2NzgtOTBhYi1jZGVmMTIzNDU2NzgiLCJlbWFpbCI6ImFub25AaW5zZm9yZ2UuY29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MTI4NTZ9.6TKQxX_OEaSvKv-yPFdH9paTqHdIMEGnBckznhvOUPo'
 };
+
+// Los usuarios entran con su nombre de usuario; la app le agrega este
+// sufijo por detrás para formar el email de la cuenta.
+const DOMINIO_CUENTAS = '@colecta.local';
 
 let insforge = null;
 let usuarioActual = null;
@@ -556,7 +562,7 @@ async function inicializarInsForge() {
     try {
         const { createClient } = await import('https://esm.sh/@insforge/sdk@1.1.5');
         insforge = createClient({ baseUrl: INSFORGE_CONFIG.baseUrl, anonKey: INSFORGE_CONFIG.anonKey });
-        await insforge.auth.signInWithPassword({ email: 'admin@lorens.com', password: '25021985' });
+        // Sin sesión todavía: la crea el usuario al iniciar sesión.
         return true;
     } catch (e) {
         console.error('InsForge init error:', e);
@@ -588,18 +594,30 @@ async function loginSalas() {
             if (!ok) throw new Error('No se pudo conectar con el servidor');
         }
 
+        // 1) Autenticación real contra el servidor.
+        const { error: errorAuth } = await insforge.auth.signInWithPassword({
+            email: usuario + DOMINIO_CUENTAS,
+            password: clave
+        });
+
+        if (errorAuth) throw new Error('Usuario o contraseña incorrectos');
+
+        // 2) Con la sesión creada, leer el perfil propio.
         const { data, error } = await insforge.database
             .from('usuarios')
-            .select('*')
+            .select('id, nombre, usuario, rol, activo')
             .eq('usuario', usuario)
-            .eq('clave', clave)
             .eq('activo', true)
             .single();
 
-        if (error || !data) throw new Error('Usuario o contraseña incorrectos');
+        if (error || !data) {
+            await insforge.auth.signOut();
+            throw new Error('Usuario o contraseña incorrectos');
+        }
 
         // Permitir admin y colector
         if (!['admin', 'colector'].includes(data.rol)) {
+            await insforge.auth.signOut();
             throw new Error('Acceso denegado para este rol');
         }
 
@@ -633,9 +651,11 @@ function mostrarPanel() {
     cargarSalas();
 }
 
-function logoutSalas() {
+async function logoutSalas() {
     detenerTimerInactividad();
     usuarioActual = null;
+    // Cerrar la sesión de verdad en el servidor, no solo en el navegador.
+    try { if (insforge) await insforge.auth.signOut(); } catch (e) { console.warn('signOut:', e); }
     if (slChartMensual) { slChartMensual.destroy(); slChartMensual = null; }
     document.getElementById('salasPanelPage').classList.add('hidden');
     document.getElementById('loginPage').classList.remove('hidden');
