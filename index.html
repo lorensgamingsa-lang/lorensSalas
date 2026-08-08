@@ -615,8 +615,9 @@ async function loginSalas() {
             throw new Error('Usuario o contraseña incorrectos');
         }
 
-        // Permitir admin y colector
-        if (!['admin', 'colector'].includes(data.rol)) {
+        // Este sitio es para el admin y para los OPERADORES de salas.
+        // Los colectores trabajan en el panel principal y en la app del celular.
+        if (!['admin', 'operador'].includes(data.rol)) {
             await insforge.auth.signOut();
             throw new Error('Acceso denegado para este rol');
         }
@@ -639,7 +640,7 @@ function mostrarPanel() {
 
     // Mostrar info usuario
     document.getElementById('slNombreUsuario').textContent = usuarioActual.nombre || usuarioActual.usuario;
-    document.getElementById('slBadgeRol').textContent = usuarioActual.rol === 'admin' ? '👑 Admin' : '🎰 Colector';
+    document.getElementById('slBadgeRol').textContent = usuarioActual.rol === 'admin' ? '👑 Admin' : '🎰 Operador';
 
     iniciarTimerInactividad();
 
