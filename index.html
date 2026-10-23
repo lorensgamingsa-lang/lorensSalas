@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LORENS GAMING — Salas</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js" integrity="sha384-FcQlsUOd0TJjROrBxhJdUhXTUgNJQxTMcxZe6nHbaEfFL1zjQ+bq/uRoBQxb0KMo" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .gradient-bg {
@@ -560,7 +560,9 @@ let _gastosCache = [];
 // ========== INSFORGE ==========
 async function inicializarInsForge() {
     try {
-        const { createClient } = await import('https://esm.sh/@insforge/sdk@1.1.5');
+        // Versión 1.5.2, la misma que el panel y la app. La 1.1.5 no tiene
+        // refreshSession() y dejaba la sesión sin poder renovarse.
+        const { createClient } = await import('https://esm.sh/@insforge/sdk@1.5.2');
         insforge = createClient({ baseUrl: INSFORGE_CONFIG.baseUrl, anonKey: INSFORGE_CONFIG.anonKey });
         // Sin sesión todavía: la crea el usuario al iniciar sesión.
         return true;
