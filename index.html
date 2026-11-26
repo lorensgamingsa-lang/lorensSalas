@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LORENS GAMING — Salas</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js" integrity="sha384-FcQlsUOd0TJjROrBxhJdUhXTUgNJQxTMcxZe6nHbaEfFL1zjQ+bq/uRoBQxb0KMo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js" integrity="sha384-A97u3Qnt9GZHURO9YJZRe7VQgGUeFzcv6I1oIGnUTxQrCxnpQMwR0/G8F2zt9abZ" crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .gradient-bg {
@@ -541,33 +542,39 @@
 
 <script>
 // ========== CONFIG ==========
-// La anonKey es pública por diseño: identifica al proyecto pero NO da
-// permisos por sí sola. Nunca poner aquí la API key de administrador.
-const INSFORGE_CONFIG = {
-    baseUrl: 'https://bn9588kv.us-east.insforge.app',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3OC0xMjM0LTU2NzgtOTBhYi1jZGVmMTIzNDU2NzgiLCJlbWFpbCI6ImFub25AaW5zZm9yZ2UuY29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MTI4NTZ9.6TKQxX_OEaSvKv-yPFdH9paTqHdIMEGnBckznhvOUPo'
+// La clave publishable es pública por diseño: identifica al proyecto pero NO
+// da permisos por sí sola (los deciden las reglas RLS de la base). Nunca
+// poner aquí la clave secreta (service_role / sb_secret_...).
+const SUPABASE_CONFIG = {
+    url: 'https://pfxzjczgqdnbgyjxumqz.supabase.co',
+    publishableKey: 'sb_publishable_tSwlS1TcdO9UJIjCbI6qrw_Krw_Unvu'
 };
 
 // Los usuarios entran con su nombre de usuario; la app le agrega este
 // sufijo por detrás para formar el email de la cuenta.
 const DOMINIO_CUENTAS = '@colecta.local';
 
-let insforge = null;
+let sb = null;   // cliente de Supabase
 let usuarioActual = null;
 let slChartMensual = null;
 let _gastosCache = [];
 
-// ========== INSFORGE ==========
-async function inicializarInsForge() {
+// ========== SUPABASE ==========
+function inicializarSupabase() {
     try {
-        // Versión 1.5.2, la misma que el panel y la app. La 1.1.5 no tiene
-        // refreshSession() y dejaba la sesión sin poder renovarse.
-        const { createClient } = await import('https://esm.sh/@insforge/sdk@1.5.2');
-        insforge = createClient({ baseUrl: INSFORGE_CONFIG.baseUrl, anonKey: INSFORGE_CONFIG.anonKey });
-        // Sin sesión todavía: la crea el usuario al iniciar sesión.
+        if (!window.supabase) throw new Error('No cargó la librería de Supabase');
+        sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publishableKey, {
+            auth: {
+                // La sesión vive solo en memoria: al recargar la página se
+                // vuelve a pedir el login (igual que antes). Mientras está
+                // abierta, la librería renueva el token sola.
+                persistSession: false,
+                autoRefreshToken: true
+            }
+        });
         return true;
     } catch (e) {
-        console.error('InsForge init error:', e);
+        console.error('Supabase init error:', e);
         return false;
     }
 }
@@ -591,13 +598,13 @@ async function loginSalas() {
     btn.disabled = true;
 
     try {
-        if (!insforge) {
-            const ok = await inicializarInsForge();
+        if (!sb) {
+            const ok = await inicializarSupabase();
             if (!ok) throw new Error('No se pudo conectar con el servidor');
         }
 
         // 1) Autenticación real contra el servidor.
-        const { error: errorAuth } = await insforge.auth.signInWithPassword({
+        const { error: errorAuth } = await sb.auth.signInWithPassword({
             email: usuario + DOMINIO_CUENTAS,
             password: clave
         });
@@ -605,22 +612,21 @@ async function loginSalas() {
         if (errorAuth) throw new Error('Usuario o contraseña incorrectos');
 
         // 2) Con la sesión creada, leer el perfil propio.
-        const { data, error } = await insforge.database
-            .from('usuarios')
+        const { data, error } = await sb.from('usuarios')
             .select('id, nombre, usuario, rol, activo')
             .eq('usuario', usuario)
             .eq('activo', true)
             .single();
 
         if (error || !data) {
-            await insforge.auth.signOut();
+            await sb.auth.signOut();
             throw new Error('Usuario o contraseña incorrectos');
         }
 
         // Este sitio es para el admin y para los OPERADORES de salas.
         // Los colectores trabajan en el panel principal y en la app del celular.
         if (!['admin', 'operador'].includes(data.rol)) {
-            await insforge.auth.signOut();
+            await sb.auth.signOut();
             throw new Error('Acceso denegado para este rol');
         }
 
@@ -658,7 +664,7 @@ async function logoutSalas() {
     detenerTimerInactividad();
     usuarioActual = null;
     // Cerrar la sesión de verdad en el servidor, no solo en el navegador.
-    try { if (insforge) await insforge.auth.signOut(); } catch (e) { console.warn('signOut:', e); }
+    try { if (sb) await sb.auth.signOut(); } catch (e) { console.warn('signOut:', e); }
     if (slChartMensual) { slChartMensual.destroy(); slChartMensual = null; }
     document.getElementById('salasPanelPage').classList.add('hidden');
     document.getElementById('loginPage').classList.remove('hidden');
@@ -796,7 +802,7 @@ function cambiarFiltroPeriodoGastos() {
 }
 
 async function cargarListaSalasSelect(selectId, valorActual = '') {
-    const { data } = await insforge.database.from('salas').select('*').eq('activa', true).order('nombre');
+    const { data } = await sb.from('salas').select('*').eq('activa', true).order('nombre');
     const salas = data || [];
     const sel = document.getElementById(selectId);
     if (!sel) return salas;
@@ -820,7 +826,7 @@ async function cargarRegistrosSalas() {
     try {
         const { fechaInicio, fechaFin } = obtenerFechasSalas();
         const filtroSala = document.getElementById('slFiltroSala')?.value || 'todas';
-        let q = insforge.database.from('registros_salas').select('*, salas(nombre)')
+        let q = sb.from('registros_salas').select('*, salas(nombre)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: false });
         if (filtroSala !== 'todas') q = q.eq('sala_id', filtroSala);
         const { data, error } = await q;
@@ -860,7 +866,7 @@ async function cargarGastosSalasTabla() {
     try {
         const filtroSala = document.getElementById('slGastosFiltroSala')?.value || 'todas';
         const { fechaInicio, fechaFin } = obtenerFechasGastos();
-        let q = insforge.database.from('gastos_salas').select('*, salas(nombre)')
+        let q = sb.from('gastos_salas').select('*, salas(nombre)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: false });
         if (filtroSala !== 'todas') q = q.eq('sala_id', filtroSala);
         const { data, error } = await q;
@@ -922,16 +928,16 @@ async function actualizarGraficoSalas() {
     }
 
     try {
-        let qChart = insforge.database.from('registros_salas')
+        let qChart = sb.from('registros_salas')
             .select('fecha, total_colectado, total_premios, sala_id, salas(nombre)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin).order('fecha', { ascending: true });
         if (filtroSala !== 'todas') qChart = qChart.eq('sala_id', filtroSala);
 
-        let qReg = insforge.database.from('registros_salas').select('total_colectado, total_premios')
+        let qReg = sb.from('registros_salas').select('total_colectado, total_premios')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin);
         if (filtroSala !== 'todas') qReg = qReg.eq('sala_id', filtroSala);
 
-        let qGas = insforge.database.from('gastos_salas').select('tipo, monto')
+        let qGas = sb.from('gastos_salas').select('tipo, monto')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin);
         if (filtroSala !== 'todas') qGas = qGas.eq('sala_id', filtroSala);
 
@@ -1060,7 +1066,7 @@ async function abrirModalRegistroSala(id = null) {
     document.getElementById('slPreviewGanancia').textContent = '$0.00';
     await cargarListaSalasSelect('registroSalaNombre');
     if (id) {
-        const { data } = await insforge.database.from('registros_salas').select('*').eq('id', id).single();
+        const { data } = await sb.from('registros_salas').select('*').eq('id', id).single();
         if (data) {
             document.getElementById('registroSalaNombre').value    = data.sala_id;
             document.getElementById('registroSalaFecha').value     = data.fecha;
@@ -1101,11 +1107,11 @@ async function guardarRegistroSala() {
     const payload = { sala_id: parseInt(sala_id), fecha, total_colectado: col, total_premios: prem, notas: notas || null };
     try {
         if (id) {
-            const { error } = await insforge.database.from('registros_salas').update(payload).eq('id', id);
+            const { error } = await sb.from('registros_salas').update(payload).eq('id', id);
             if (error) throw error;
             showNotification('Registro actualizado', 'success');
         } else {
-            const { error } = await insforge.database.from('registros_salas').insert(payload);
+            const { error } = await sb.from('registros_salas').insert(payload);
             if (error) throw error;
             showNotification('Registro guardado', 'success');
         }
@@ -1121,7 +1127,7 @@ async function editarRegistroSala(id)  { await abrirModalRegistroSala(id); }
 async function eliminarRegistroSala(id) {
     if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
     try {
-        const { error } = await insforge.database.from('registros_salas').delete().eq('id', id);
+        const { error } = await sb.from('registros_salas').delete().eq('id', id);
         if (error) throw error;
         showNotification('Registro eliminado', 'success');
         cargarSalas();
@@ -1144,7 +1150,7 @@ function cerrarModalGestionarSalas() {
 }
 
 async function renderizarListaSalasGestion() {
-    const { data } = await insforge.database.from('salas').select('*').order('nombre');
+    const { data } = await sb.from('salas').select('*').order('nombre');
     const salas = data || [];
     const lista = document.getElementById('listaSalasGestion');
     if (!salas.length) { lista.innerHTML = '<div class="text-center text-slate-400 text-sm py-4">No hay salas creadas</div>'; return; }
@@ -1169,7 +1175,7 @@ async function crearSala() {
     const nombre = document.getElementById('nuevaSalaNombre').value.trim();
     if (!nombre) { showNotification('Ingresa el nombre de la sala', 'error'); return; }
     try {
-        const { error } = await insforge.database.from('salas').insert({ nombre, activa: true });
+        const { error } = await sb.from('salas').insert({ nombre, activa: true });
         if (error) throw error;
         document.getElementById('nuevaSalaNombre').value = '';
         showNotification('Sala creada', 'success');
@@ -1179,7 +1185,7 @@ async function crearSala() {
 
 async function toggleSalaActiva(id, activa) {
     try {
-        const { error } = await insforge.database.from('salas').update({ activa: !activa }).eq('id', id);
+        const { error } = await sb.from('salas').update({ activa: !activa }).eq('id', id);
         if (error) throw error;
         await renderizarListaSalasGestion();
     } catch (e) { showNotification('Error: ' + e.message, 'error'); }
@@ -1188,7 +1194,7 @@ async function toggleSalaActiva(id, activa) {
 async function eliminarSala(id) {
     if (!confirm('¿Eliminar esta sala? Los registros existentes se mantendrán pero quedarán sin sala asignada.')) return;
     try {
-        const { error } = await insforge.database.from('salas').delete().eq('id', id);
+        const { error } = await sb.from('salas').delete().eq('id', id);
         if (error) throw error;
         showNotification('Sala eliminada', 'success');
         await renderizarListaSalasGestion();
@@ -1205,7 +1211,7 @@ async function abrirModalGastoSala(id = null) {
     document.querySelectorAll('input[name="gastoTipo"]').forEach(r => { r.checked = r.value === 'gasto'; });
     await cargarListaSalasSelect('gastoSalaNombre');
     if (id) {
-        const { data } = await insforge.database.from('gastos_salas').select('*').eq('id', id).single();
+        const { data } = await sb.from('gastos_salas').select('*').eq('id', id).single();
         if (data) {
             document.getElementById('gastoSalaNombre').value      = data.sala_id;
             document.getElementById('gastoSalaFecha').value       = data.fecha;
@@ -1236,11 +1242,11 @@ async function guardarGastoSala() {
     const payload = { sala_id: parseInt(sala_id), fecha, tipo, monto, descripcion: descripcion || null };
     try {
         if (id) {
-            const { error } = await insforge.database.from('gastos_salas').update(payload).eq('id', id);
+            const { error } = await sb.from('gastos_salas').update(payload).eq('id', id);
             if (error) throw error;
             showNotification('Registro actualizado', 'success');
         } else {
-            const { error } = await insforge.database.from('gastos_salas').insert(payload);
+            const { error } = await sb.from('gastos_salas').insert(payload);
             if (error) throw error;
             showNotification('Registro guardado', 'success');
         }
@@ -1254,7 +1260,7 @@ async function editarGastoSala(id)  { await abrirModalGastoSala(id); }
 async function eliminarGastoSala(id) {
     if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
     try {
-        const { error } = await insforge.database.from('gastos_salas').delete().eq('id', id);
+        const { error } = await sb.from('gastos_salas').delete().eq('id', id);
         if (error) throw error;
         showNotification('Registro eliminado', 'success');
         cargarSalas();
@@ -1263,7 +1269,7 @@ async function eliminarGastoSala(id) {
 
 // ========== INIT ==========
 document.addEventListener('DOMContentLoaded', async () => {
-    await inicializarInsForge();
+    await inicializarSupabase();
     // Nunca restaurar sesión automáticamente — siempre requiere login manual
 
     // Reiniciar timer con cualquier actividad del usuario
